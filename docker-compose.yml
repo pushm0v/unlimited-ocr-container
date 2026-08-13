@@ -1,30 +1,56 @@
+x-ocr-common: &ocr-common
+  build:
+    context: .
+    dockerfile: Dockerfile.serve
+  restart: unless-stopped
+  volumes:
+    # Shared HF cache: both instances read the same weights, so the download
+    # happens once rather than per GPU.
+    - ../files/models:/models
+  environment:
+    # infer.py hardcodes fa3 + mem-fraction 0.8, which are wrong for a 12GB
+    # SM86 card. These are the knobs that path could not reach.
+    ATTENTION_BACKEND: flashinfer
+    MEM_FRACTION_STATIC: "0.75"
+    CONTEXT_LENGTH: "16384"
+    CONCURRENCY: "4"
+    PDF_DPI: "300"
+    SERVE_PORT: "8000"
+    HF_TOKEN: ${HF_TOKEN:-}
+
 services:
-  ocr:
-    build:
-      context: .
-      dockerfile: Dockerfile.serve
-    environment:
-      # infer.py hardcodes fa3 + mem-fraction 0.8, which are wrong for a 12GB
-      # SM86 card. These are the knobs that path could not reach.
-      ATTENTION_BACKEND: flashinfer
-      MEM_FRACTION_STATIC: "0.75"
-      CONTEXT_LENGTH: "16384"
-      CONCURRENCY: "4"
-      PDF_DPI: "300"
-      SERVE_PORT: "8000"
-      HF_TOKEN: ${HF_TOKEN:-}
-    volumes:
-      # Persist the HF cache, or every redeploy re-downloads the weights.
-      - ../files/models:/models
-    ports:
-      - "8000"
-    restart: unless-stopped
-    # Plain-Compose GPU syntax. Requires the NVIDIA Container Toolkit on the
-    # host; no Swarm generic-resource advertisement needed.
+  ocr-gpu0:
+    <<: *ocr-common
+    # device_ids pins this container to physical GPU 0. It is mutually
+    # exclusive with `count` - setting count here would hand both cards to
+    # both containers and they would fight over the same VRAM.
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: all
+              device_ids: ["0"]
               capabilities: [gpu]
+
+  ocr-gpu1:
+    <<: *ocr-common
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+
+  # Single public entrypoint. Only this service exposes a port; the two OCR
+  # containers stay on the internal network and are unreachable from outside.
+  balancer:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080"
+    depends_on:
+      - ocr-gpu0
+      - ocr-gpu1
