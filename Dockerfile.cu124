@@ -1,0 +1,56 @@
+ARG DEBIAN_FRONTEND=noninteractive
+ARG UNLIMITED_OCR_REF=c7ade8c686d8f026c2db43b58320e0a1e39e4064
+
+# ==================== GPU STAGE (Optimized for RTX 3080 Ti) ====================
+# Using CUDA 12.4 on Ubuntu 22.04 forces FlashAttention 2 / SM86 compatibility stable paths
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 AS gpu
+
+ARG DEBIAN_FRONTEND
+ARG UNLIMITED_OCR_REF
+
+ENV PATH=/opt/venv/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/models/huggingface \
+    TRANSFORMERS_CACHE=/models/huggingface \
+    SGLANG_DISABLE_TORCH_COMPILE_CACHE=0 \
+    TORCH_CUDA_ARCH_LIST="8.6"
+
+# Added deadsnakes PPA to cleanly get Python 3.12 on Ubuntu 22.04
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    libgl1 \
+    libglib2.0-0 \
+    libnuma-dev \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+  && rm -rf /var/lib/apt/lists/*
+
+# Use explicit absolute path to system python3.12 to set up environment
+RUN python3.12 -m venv /opt/venv \
+  && /opt/venv/bin/pip install --upgrade pip setuptools wheel
+
+WORKDIR /opt
+RUN git clone https://github.com/baidu/Unlimited-OCR.git /opt/Unlimited-OCR \
+  && cd /opt/Unlimited-OCR \
+  && git checkout "${UNLIMITED_OCR_REF}"
+
+WORKDIR /opt/Unlimited-OCR
+# Absolute path execution prevents breaking pip sandbox mappings
+RUN /opt/venv/bin/pip install wheel/sglang-0.0.0.dev11416+g92e8bb79e-py3-none-any.whl \
+  && /opt/venv/bin/pip install kernels==0.11.7 pymupdf==1.27.2.2 requests
+
+COPY scripts/entrypoint.sh /usr/local/bin/unlimited-ocr
+RUN chmod +x /usr/local/bin/unlimited-ocr \
+  && mkdir -p /workspace /models/huggingface \
+  && chmod -R 777 /models
+
+WORKDIR /workspace
+ENTRYPOINT ["unlimited-ocr"]
+CMD ["--help"]
