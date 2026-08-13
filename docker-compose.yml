@@ -12,11 +12,9 @@ x-ocr-common: &ocr-common
     # SM86 card. These are the knobs that path could not reach.
     ATTENTION_BACKEND: flashinfer
     # MEM_FRACTION_STATIC: "0.75"
-    # 1. LOWER THIS: Drop from 0.75 to 0.50 or 0.60 to leave room for weights
-    MEM_FRACTION_STATIC: "0.55"
-    # 2. ADD THIS: Solves the fragmentation issue mentioned in your error log
+    MEM_FRACTION_STATIC: "0.82"
+    CONTEXT_LENGTH: "4096"
     PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
-    CONTEXT_LENGTH: "16384"
     CONCURRENCY: "4"
     PDF_DPI: "300"
     SERVE_PORT: "8000"
