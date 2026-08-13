@@ -13,10 +13,10 @@ x-ocr-common: &ocr-common
     ATTENTION_BACKEND: flashinfer
     # MEM_FRACTION_STATIC: "0.75"
     MEM_FRACTION_STATIC: "0.82"
-    CONTEXT_LENGTH: "4096"
+    CONTEXT_LENGTH: "2048"
+    CONCURRENCY: "1"
+    PDF_DPI: "130"
     PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
-    CONCURRENCY: "4"
-    PDF_DPI: "300"
     SERVE_PORT: "8000"
     HF_TOKEN: ${HF_TOKEN:-}
 
@@ -52,7 +52,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "8080"
+      - "8080:8080"
     depends_on:
       - ocr-gpu0
       - ocr-gpu1
