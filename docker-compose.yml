@@ -1,0 +1,30 @@
+services:
+  ocr:
+    build:
+      context: .
+      dockerfile: Dockerfile.serve
+    environment:
+      # infer.py hardcodes fa3 + mem-fraction 0.8, which are wrong for a 12GB
+      # SM86 card. These are the knobs that path could not reach.
+      ATTENTION_BACKEND: flashinfer
+      MEM_FRACTION_STATIC: "0.75"
+      CONTEXT_LENGTH: "16384"
+      CONCURRENCY: "4"
+      PDF_DPI: "300"
+      SERVE_PORT: "8000"
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      # Persist the HF cache, or every redeploy re-downloads the weights.
+      - ../files/models:/models
+    ports:
+      - "8000"
+    restart: unless-stopped
+    # Plain-Compose GPU syntax. Requires the NVIDIA Container Toolkit on the
+    # host; no Swarm generic-resource advertisement needed.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
