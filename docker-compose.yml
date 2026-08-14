@@ -11,11 +11,24 @@ x-ocr-common: &ocr-common
     # infer.py hardcodes fa3 + mem-fraction 0.8, which are wrong for a 12GB
     # SM86 card. These are the knobs that path could not reach.
     ATTENTION_BACKEND: flashinfer
-    # MEM_FRACTION_STATIC: "0.75"
-    # MEM_FRACTION_STATIC: "0.82"
-    # CONTEXT_LENGTH: "2048"
-    CONCURRENCY: "4"
-    # PDF_DPI: "130"
+
+    # 2. SEVERELY RESTRICT CHUNK SIZES (Crucial for SGLang/VLLM processing)
+    # This prevents the backend from bundling too many image tokens into a single execution step.
+    SGLANG_CHUNKED_PREFILL_SIZE: "256"
+
+    # 3. REDUCE THE STATIC POOL TO COMPENSATE FOR CHUNKING
+    # Since chunked prefill lowers the dynamic activation spike, we can try backing
+    # down slightly to leave breathing room, or hold it at 0.82 if weights are massive.
+    MEM_FRACTION_STATIC: "0.80"
+
+    # 4. CAP MAX IMAGE TOKENS (If the backend supports it)
+    # This drops the physical resolution if a large document is submitted.
+    SGLANG_MAX_IMAGE_TOKENS: "1024"
+
+    # Existing settings kept tight
+    CONTEXT_LENGTH: "2048"
+    CONCURRENCY: "1"
+    PDF_DPI: "120"
     PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     SERVE_PORT: "8000"
     HF_TOKEN: ${HF_TOKEN:-}
