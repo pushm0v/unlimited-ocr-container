@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -223,11 +224,37 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[http] {fmt % a}", flush=True)
 
 
+def watch_backend(proc, server):
+    """Exit the process if SGLang dies, so the container restart policy fires.
+
+    Without this the HTTP server keeps serving after an OOM kill: the container
+    stays "up", /health returns 503 forever, and nginx quietly reroutes every
+    request onto the surviving GPU. Docker only restarts containers that exit,
+    not ones merely marked unhealthy, so a dead backend must take the process
+    down with it.
+    """
+    while True:
+        time.sleep(10)
+        code = proc.poll()
+        if code is None:
+            continue
+        # poll() reports a signal death as a negative number: -9 is SIGKILL,
+        # which is what the kernel OOM killer sends.
+        reason = "OOM-killed" if code in (-9, 137) else f"exited with code {code}"
+        print(f"[serve] SGLang {reason}; shutting down so the container "
+              f"is restarted", flush=True)
+        # Always exit non-zero, even if the backend exited 0 - a backend that
+        # is gone makes this process useless, and restart:on-failure only
+        # triggers on a non-zero status.
+        os._exit(137 if code in (-9, 137) else 1)
+
+
 def main():
     global _backend_ready
     proc = start_backend()
     _backend_ready = True
     server = ThreadingHTTPServer(("0.0.0.0", SERVE_PORT), Handler)
+    threading.Thread(target=watch_backend, args=(proc, server), daemon=True).start()
     print(f"[serve] listening on :{SERVE_PORT}", flush=True)
     try:
         server.serve_forever()

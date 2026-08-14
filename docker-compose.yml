@@ -2,6 +2,11 @@ x-ocr-common: &ocr-common
   build:
     context: .
     dockerfile: Dockerfile.serve
+  # Restart indefinitely: an OOM should never leave a GPU permanently idle.
+  # The serve.py watchdog exits the process when SGLang dies, which is what
+  # makes this fire at all - Docker does not restart merely-unhealthy
+  # containers. Watch the RESTARTS column; a climbing count means the model
+  # is not fitting and no number of retries will fix it.
   restart: unless-stopped
   volumes:
     # Shared HF cache: both instances read the same weights, so the download
