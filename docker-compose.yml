@@ -19,12 +19,11 @@ x-ocr-common: &ocr-common
     # 3. REDUCE THE STATIC POOL TO COMPENSATE FOR CHUNKING
     # Since chunked prefill lowers the dynamic activation spike, we can try backing
     # down slightly to leave breathing room, or hold it at 0.82 if weights are massive.
-    MEM_FRACTION_STATIC: "0.80"
+    MEM_FRACTION_STATIC: "0.75"
 
     # 4. CAP MAX IMAGE TOKENS (If the backend supports it)
     # This drops the physical resolution if a large document is submitted.
     SGLANG_MAX_IMAGE_TOKENS: "1024"
-
     # Existing settings kept tight
     CONTEXT_LENGTH: "2048"
     CONCURRENCY: "1"
