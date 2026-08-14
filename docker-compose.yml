@@ -12,10 +12,10 @@ x-ocr-common: &ocr-common
     # SM86 card. These are the knobs that path could not reach.
     ATTENTION_BACKEND: flashinfer
     # MEM_FRACTION_STATIC: "0.75"
-    MEM_FRACTION_STATIC: "0.82"
-    CONTEXT_LENGTH: "2048"
-    CONCURRENCY: "1"
-    PDF_DPI: "130"
+    # MEM_FRACTION_STATIC: "0.82"
+    # CONTEXT_LENGTH: "2048"
+    CONCURRENCY: "4"
+    # PDF_DPI: "130"
     PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     SERVE_PORT: "8000"
     HF_TOKEN: ${HF_TOKEN:-}
