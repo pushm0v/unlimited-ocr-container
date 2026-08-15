@@ -39,6 +39,10 @@ PDF_DPI = int(os.environ.get("PDF_DPI", "300"))
 SERVE_PORT = int(os.environ.get("SERVE_PORT", "8000"))
 CONCURRENCY = int(os.environ.get("CONCURRENCY", "4"))
 STARTUP_TIMEOUT = int(os.environ.get("STARTUP_TIMEOUT", "900"))
+# Optional shared secret for /ocr. Empty = open (single-box / trusted network).
+# When the balancer is published for a remote webapp box, set this on both
+# sides so a leaked port cannot be driven by anyone who finds it.
+SHARED_TOKEN = os.environ.get("OCR_SHARED_TOKEN", "")
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 _ngram_processor_str = None
@@ -205,6 +209,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.split("?")[0] != "/ocr":
             return self._send(404, {"error": "not found"})
+        if SHARED_TOKEN and self.headers.get("X-OCR-Token", "") != SHARED_TOKEN:
+            return self._send(401, {"error": "unauthorized"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0:

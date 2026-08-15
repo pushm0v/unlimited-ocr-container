@@ -1,0 +1,45 @@
+# WEBAPP BOX — public web app + job store.
+# Deploy this on a separate (CPU) machine from the GPU cluster. It reaches the
+# OCR balancer over the network via OCR_URL, so there is no build/GPU here.
+#
+# Required env (set in Dokploy Environment or a .env next to this file):
+#   POSTGRES_PASSWORD   password for the bundled Postgres
+#   OCR_URL             e.g. http://10.0.0.5:8080 or https://ocr.internal.example
+#   OCR_SHARED_TOKEN    optional; must match the GPU box if you enabled it
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ocr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ocr
+    volumes:
+      - ../files/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocr -d ocr"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  webapp:
+    build:
+      context: ./webapp
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://ocr:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/ocr
+      # The balancer now lives on another host - reach it by URL, not by
+      # Docker service name.
+      OCR_URL: ${OCR_URL:?set OCR_URL to the GPU box balancer, e.g. http://10.0.0.5:8080}
+      OCR_SHARED_TOKEN: ${OCR_SHARED_TOKEN:-}
+      # Must cover a worst-case document: matches nginx proxy_read_timeout
+      # and REQUEST_TIMEOUT in scripts/serve.py.
+      OCR_TIMEOUT_MS: "1200000"
+      # Match the GPU count on the other box; more just queues inside nginx.
+      WORKER_CONCURRENCY: "2"
+      MAX_UPLOAD_BYTES: "536870912"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy

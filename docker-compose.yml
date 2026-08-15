@@ -1,3 +1,10 @@
+# GPU BOX — OCR inference cluster.
+# Deploy this on the machine with the 2x RTX 3080 Ti. The web app runs on a
+# separate box (see docker-compose.webapp.yml) and reaches the balancer over
+# the network, so unlike the single-box setup the balancer must PUBLISH a port.
+# That port is now internet-reachable if the box is: firewall it to the webapp
+# box, or put it behind a Cloudflare Tunnel / VPN. Optionally set
+# OCR_SHARED_TOKEN so serve.py rejects requests without the matching header.
 x-ocr-common: &ocr-common
   build:
     context: .
@@ -25,6 +32,9 @@ x-ocr-common: &ocr-common
     PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     SERVE_PORT: "8000"
     HF_TOKEN: ${HF_TOKEN:-}
+    # Empty = open. Set to the same value as the webapp box to require a token
+    # on /ocr now that the balancer is network-reachable.
+    OCR_SHARED_TOKEN: ${OCR_SHARED_TOKEN:-}
 
 services:
   ocr-gpu0:
@@ -50,15 +60,17 @@ services:
               device_ids: ["1"]
               capabilities: [gpu]
 
-  # Single public entrypoint. Only this service exposes a port; the two OCR
-  # containers stay on the internal network and are unreachable from outside.
+  # Load balancer across the two GPUs and the single entrypoint the webapp box
+  # talks to. Published on the host so a remote box can reach it. Bind to a
+  # private interface if you have one: set OCR_BIND (e.g. 10.0.0.5) so this
+  # never listens on a public NIC.
   balancer:
     image: nginx:1.27-alpine
     restart: unless-stopped
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "8080:8080"
+      - "${OCR_BIND:-0.0.0.0}:8080:8080"
     depends_on:
       - ocr-gpu0
       - ocr-gpu1
